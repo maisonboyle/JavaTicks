@@ -1,0 +1,598 @@
+package uk.ac.cam.dab80.oop.tick4;
+
+public class ArrayWorld extends World implements Cloneable{
+
+    private boolean[][] world;
+	private boolean[] deadRow;
+
+	@Override
+	public ArrayWorld clone() throws CloneNotSupportedException{
+		ArrayWorld copyWorld = (ArrayWorld)super.clone();
+		copyWorld.world = new boolean[getHeight()][getWidth()];
+		for (int i = 0; i < getHeight(); i++){
+			boolean allDead = true;
+			for (int j = 0; j < getWidth(); j++){
+				boolean alive = world[i][j];
+				if (alive){
+					allDead = false;
+				}
+				copyWorld.world[i][j] = alive;
+			}
+			if (allDead){
+				copyWorld.world[i] = deadRow;
+			}
+		}
+		return copyWorld;
+	}
+	
+	private void setDead(){
+		for (int i = 0; i < getHeight(); i++){
+			boolean allDead = true;
+			for (int j = 0; j < getWidth(); j++){
+				if (world[i][j]){
+					allDead = false;
+					break;
+				}
+			}
+			if (allDead){
+				world[i] = deadRow;
+			}
+		}
+	}
+	
+    public ArrayWorld(String serial) throws PatternFormatException  {
+        super(serial);
+        world = new boolean[getHeight()][getWidth()];
+        getPattern().initialise(this);
+		deadRow = new boolean[getWidth()];
+		setDead();
+    }
+	
+	public ArrayWorld(Pattern p) throws PatternFormatException  {
+        super(p);
+        world = new boolean[getHeight()][getWidth()];
+        getPattern().initialise(this);
+		deadRow = new boolean[getWidth()];
+		setDead();
+    }
+
+	public ArrayWorld(ArrayWorld toCopy) {
+		super(toCopy);
+		world = new boolean[getHeight()][getWidth()];
+		for (int i = 0; i < getHeight(); i++){
+			for (int j = 0; j < getWidth(); j++){
+					world[i][j] = toCopy.world[i][j];
+			}
+		}
+		deadRow = toCopy.deadRow;
+	}
+	
+    protected void nextGenerationImpl(){
+        boolean[][] nextGeneration = new boolean[getHeight()][];
+        for (int y = 0; y < getHeight(); ++y) {
+            nextGeneration[y] = new boolean[getWidth()];
+            for (int x = 0; x < getWidth(); ++x) {
+                boolean nextCell = computeCell(x, y);
+                nextGeneration[y][x] = nextCell;
+            }
+        }
+        world = nextGeneration;
+    }
+
+    public boolean getCell(int col, int row){
+        if (row < 0 || row >= getHeight()) return false;
+        if (col < 0 || col >= getWidth()) return false;
+        return world[row][col];
+    }
+
+    public void setCell(int col, int row, boolean value){
+        if (row < 0 || row >= getHeight()) return;
+        if (col < 0 || col >= getWidth()) return;
+        world[row][col] = value;
+        return;
+    }
+
+
+}
+
+
+
+package uk.ac.cam.dab80.oop.tick4;
+
+public class Pattern implements Comparable<Pattern> {
+
+	private String name;
+	private String author;
+	private int width;
+	private int height;
+	private int startCol;
+	private int startRow;
+	private String cells;
+    
+	@Override
+	public int compareTo(Pattern o) {
+		return name.compareTo(o.name);
+	}
+	
+	public String getName() {
+		return name;
+	}
+  
+	public String getAuthor() {
+		return author;
+	}
+  
+	public int getWidth(){
+		return width;
+	}
+  
+	public int getHeight(){
+		return height;
+	}
+  
+	public int getStartCol(){
+		return startCol;
+	}
+  
+	public int getStartRow(){
+		return startRow;
+	}
+  
+	public String getCells(){
+		return cells;
+	}
+
+	public Pattern(String format) throws PatternFormatException{
+		if (format.equals("")){throw new PatternFormatException("Please specify a pattern.");}
+		String[] inputs = format.split(":");
+		int fields = inputs.length;
+		if (fields != 7){
+			throw new PatternFormatException("Invalid pattern format: Incorrect number of fields in pattern (found "+fields+").");
+		}
+		// [name, author, width, height, startcol, startrow, cells]
+		// Do remaining checks with regex. input[i].matches(pattern as string)
+		// "\d+" = 1+ digits. Also [a-z] or [0-9]
+		name = inputs[0];
+		author = inputs[1];
+		try{
+			width = Integer.parseInt(inputs[2]);
+		}catch (NumberFormatException e){
+			throw new PatternFormatException("Invalid pattern format: Could not interpret the width field as a number ('"+inputs[2]+"' given).");
+		}
+		try{
+			height = Integer.parseInt(inputs[3]);
+		}catch (NumberFormatException e){
+			throw new PatternFormatException("Invalid pattern format: Could not interpret the height field as a number ('"+inputs[3]+"' given).");
+		}
+		try{
+			startCol = Integer.parseInt(inputs[4]);
+		}catch (NumberFormatException e){
+			throw new PatternFormatException("Invalid pattern format: Could not interpret the startX field as a number ('"+inputs[4]+"' given).");
+		}	
+		try{
+			startRow = Integer.parseInt(inputs[5]);
+		}catch (NumberFormatException e){
+			throw new PatternFormatException("Invalid pattern format: Could not interpret the startY field as a number ('"+inputs[5]+"' given).");
+		}
+		if (inputs[6].matches("[\\s01]*")){
+			cells = inputs[6];	
+		}else{
+			throw new PatternFormatException("Invalid pattern format: Malformed pattern '"+inputs[6]+"'.");
+		}
+	}
+
+	public void initialise(World world) throws PatternFormatException {
+		String[] cellRows = cells.split(" ");
+		for (int y = 0; y < cellRows.length; y++){
+			char[] row = cellRows[y].toCharArray();
+			for (int x = 0; x < row.length; x++){
+				if (row[x] == '1'){
+					try{
+						world.setCell(startCol + x, startRow + y, true);
+					}catch (ArrayIndexOutOfBoundsException e){
+						throw new PatternFormatException("Invalid pattern format: Pattern cannot be applied to this world.");
+					}
+				}
+			}
+		}
+	}
+}
+
+package uk.ac.cam.dab80.oop.tick4;
+import java.io.*;
+import java.util.*;
+
+public class GameOfLife {
+
+    private World world;
+	private PatternStore store;
+	private ArrayList<World> cachedWorlds;
+
+    public GameOfLife(PatternStore ps) {
+		store = ps;
+    }
+
+	
+	private World copyWorld(boolean useCloning) {
+		// TODO later
+		if (useCloning){
+			try{
+				return world.clone();
+			}catch (CloneNotSupportedException e){
+				// Should never fail to clone existing world
+				throw new RuntimeException(e);
+			}
+		}else if(world instanceof ArrayWorld){
+			return new ArrayWorld((ArrayWorld)world);
+		}else{
+			return new PackedWorld((PackedWorld)world);
+		}
+	}
+	
+	public void play() throws IOException, PatternFormatException {
+        
+		String response="";
+		BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+    
+		System.out.println("Please select a pattern to play (l to list:");
+		while (!response.equals("q")) {
+			response = in.readLine();
+			System.out.println(response);
+			if (response.equals("b")){
+				if (world == null) {
+					System.out.println("Please select a pattern to play (l to list):");
+				} else {
+					if (world.getGenerationCount() > 0){
+						world = cachedWorlds.get(world.getGenerationCount() - 1);
+					}
+					print();
+				}
+			}
+			if (response.equals("f")) {
+				if (world == null) {
+					System.out.println("Please select a pattern to play (l to list):");
+				}
+				else {
+					if (world.getGenerationCount() < cachedWorlds.size() - 1){
+						world = cachedWorlds.get(world.getGenerationCount() + 1);
+					}else{
+					    world = copyWorld(true);
+						world.nextGeneration();
+						cachedWorlds.add(world);
+					}
+					print();
+				}
+			}
+			else if (response.equals("l")) {
+				List<Pattern> names = store.getPatternsNameSorted();
+				int i = 0;
+				for (Pattern p : names) {
+					System.out.println(i+" "+p.getName()+"  ("+p.getAuthor()+")");
+					i++;
+				}
+			}
+			else if (response.startsWith("p")) {
+				List<Pattern> names = store.getPatternsNameSorted();
+				int selection = Integer.parseInt(response.split(" ")[1]);
+				Pattern choice = store.getPatternByName(names.get(selection).getName());
+				cachedWorlds = new ArrayList<>();
+				if (choice.getWidth() * choice.getHeight() <= 64){
+					world = new PackedWorld(choice);
+				}else{
+					world = new ArrayWorld(choice);
+				}
+				cachedWorlds.add(world);
+				print();
+			} 
+		}
+	}
+
+	public static void main(String args[]) throws IOException, PatternFormatException {
+		if (args.length!=1) {
+			System.out.println("Usage: java GameOfLife <path/url to store>");
+			return;
+		}
+  
+		try {
+			PatternStore ps = new PatternStore(args[0]);
+			GameOfLife gol = new GameOfLife(ps);    
+			gol.play();
+		}
+		catch (IOException ioe) {
+			System.out.println("Failed to load pattern store");
+		}
+	}
+	
+
+    public void print() {
+        System.out.println("- " + world.getGenerationCount());
+        for (int row = 0; row < world.getHeight(); row++) {
+            for (int col = 0; col < world.getWidth(); col++) {
+                System.out.print(world.getCell(col, row) ? "#" : "_");
+            }
+            System.out.println();
+        }
+    }
+
+}
+
+
+package uk.ac.cam.dab80.oop.tick4;
+
+public class PatternFormatException extends Exception {
+   public PatternFormatException(String msg) {
+      super(msg);
+   }
+}
+
+
+package uk.ac.cam.dab80.oop.tick4;
+
+
+public class PackedWorld extends World implements Cloneable{
+
+    private long world;
+    // If smaller than 8x8, top left corner used
+
+	
+	@Override
+	public PackedWorld clone() throws CloneNotSupportedException{
+		return (PackedWorld)super.clone();
+	}
+	
+    public PackedWorld(String serial) throws PatternFormatException {
+        super(serial);
+        if (getWidth() * getHeight() > 64){
+            throw new IllegalArgumentException("World cannot be more than 64 cells");
+        }
+        getPattern().initialise(this);
+    }
+	public PackedWorld(Pattern p) throws PatternFormatException {
+        super(p);
+        if (getWidth() * getHeight() > 64){
+            throw new IllegalArgumentException("World cannot be more than 64 cells");
+        }
+        getPattern().initialise(this);
+    }
+	
+	public PackedWorld(PackedWorld toCopy){
+		super(toCopy);
+		world = toCopy.world;
+	}
+
+    protected void nextGenerationImpl(){
+        long nextGen = 0;
+        for (int y = 0; y < getHeight(); ++y) {
+            for (int x = 0; x < getWidth(); ++x) {
+                if (computeCell(x, y)){
+                    nextGen |= 1L << (x + y*getWidth());
+                }
+            }
+        }
+        world = nextGen;
+    }
+
+    public boolean getCell(int col, int row){
+        if (row < 0 || row >= getHeight()) return false;
+        if (col < 0 || col >= getWidth()) return false;
+        return (((world >>> (col + row*getWidth())) & 1) == 1);
+    }
+
+    public void setCell(int col, int row, boolean value){
+        if (row < 0 || row >= getHeight()) return;
+        if (col < 0 || col >= getWidth()) return;
+        if (value){
+            world |= 1L << (col + row*getWidth());
+        }
+        else {
+            world &= ~(1L << (col + row*getWidth()));
+        }
+        return;
+    }
+}
+
+
+
+package uk.ac.cam.dab80.oop.tick4;
+
+public abstract class World implements Cloneable{
+	private int mGeneration = 0;
+	private Pattern mPattern;
+
+	World(String format) throws PatternFormatException{
+		mPattern = new Pattern(format);
+	}
+	World(Pattern p) throws PatternFormatException{
+		mPattern = p;
+	}
+	
+	@Override
+	public World clone() throws CloneNotSupportedException{
+		return (World)super.clone();
+	}
+	
+	World(World toCopy){
+		mGeneration = toCopy.mGeneration;
+		mPattern = toCopy.mPattern;
+	}
+
+	public int getWidth() {
+		return mPattern.getWidth();
+	}
+
+	public int getHeight() {
+		return mPattern.getHeight();
+	}
+
+	public int getGenerationCount() {
+		return mGeneration;
+	}
+
+	protected void incrementGenerationCount() {
+		mGeneration++;
+	}
+
+	protected Pattern getPattern() {
+		return mPattern;
+	}
+
+	protected abstract void nextGenerationImpl();
+
+	public void nextGeneration(){
+		nextGenerationImpl();
+		mGeneration++;
+	}
+
+	public abstract boolean getCell(int col, int row);
+
+	public abstract void setCell(int col, int row, boolean v);
+
+	protected int countNeighbours(int col, int row) {
+		int count = 0;
+		for (int x = -1; x < 2; x++) {
+			for (int y = -1; y < 2; y++) {
+				if (!(x == 0 && y == 0)) {
+					count += getCell(col + x, row + y) ? 1 : 0;
+				}
+			}
+		}
+		return count;
+	}
+
+	protected boolean computeCell(int col, int row) {
+		boolean liveCell = getCell(col, row);
+		int neighbours = countNeighbours(col, row);
+		boolean nextCell = false;
+		if (liveCell) {
+			if (neighbours > 1 && neighbours < 4) {
+				nextCell = true;
+			}
+		} else if (neighbours == 3) {
+			nextCell = true;
+		}
+		return nextCell;
+	}
+}
+
+
+
+package uk.ac.cam.dab80.oop.tick4;
+
+import java.io.*;
+import java.net.*;
+import java.util.*;
+
+public class PatternStore {
+    private List<Pattern> patterns = new LinkedList<>();
+    private Map<String,List<Pattern>> mapAuths = new HashMap<>();
+    private Map<String,Pattern> mapName = new HashMap<>();
+
+	public PatternStore(String source) throws IOException {
+		if (source.startsWith("http://") || source.startsWith("https://")) {
+			loadFromURL(source);
+		}
+		else {
+			loadFromDisk(source);
+		}
+	}
+    
+	public PatternStore(Reader source) throws IOException {
+		load(source);
+	}
+    
+	private void load(Reader r) throws IOException {
+		BufferedReader b = new BufferedReader(r);
+		String line;
+		Pattern p;
+		while ( (line = b.readLine()) != null) {
+			System.out.println(line);
+			try{
+				p = new Pattern(line);
+			} catch (PatternFormatException e){
+				System.out.println(e.getMessage());
+				continue;
+			}
+			patterns.add(p);
+			mapName.put(p.getName(),p);
+			List<Pattern> authorPatterns = mapAuths.get(p.getAuthor());
+			if (authorPatterns == null){
+				authorPatterns = new LinkedList<>();
+				authorPatterns.add(p);
+				mapAuths.put(p.getAuthor(),authorPatterns);
+			}else{
+				authorPatterns.add(p);
+			}
+		} 
+	}
+    
+    
+   private void loadFromURL(String url) throws IOException {
+		URL destination = new URL(url);
+		URLConnection conn = destination.openConnection();
+		Reader r = new InputStreamReader(conn.getInputStream());
+		load(r);
+	}
+
+   private void loadFromDisk(String filename) throws IOException {
+        Reader r = new FileReader(filename);
+        load(r);
+   }
+
+    public List<Pattern> getPatternsNameSorted() {
+        Collections.sort(patterns);
+        return new LinkedList<Pattern>(patterns);
+	}
+
+	public List<Pattern> getPatternsAuthorSorted() {
+		Collections.sort(patterns,new Comparator<Pattern>() {
+			public int compare(Pattern p1, Pattern p2){
+				if (p1.getAuthor().equals(p2.getAuthor())){
+					return p1.compareTo(p2);
+				}
+				return p1.getAuthor().compareTo(p2.getAuthor());
+			}
+		});
+		return new LinkedList<Pattern>(patterns);
+	}
+
+	public List<Pattern> getPatternsByAuthor(String author) throws PatternNotFound {
+        List<Pattern> entry = mapAuths.get(author);
+        if (entry == null){
+           throw new PatternNotFound();
+        }
+		Collections.sort(entry);
+        return new LinkedList<Pattern>(entry);
+  // TODO:  return a list of patterns from a particular author sorted by name
+	}
+
+	public Pattern getPatternByName(String name) throws PatternNotFound {
+		Pattern entry = mapName.get(name);
+		if (entry == null){
+			throw new PatternNotFound();
+		}
+		return entry;
+  // TODO: Get a particular pattern by name
+	}
+
+	public List<String> getPatternAuthors() {
+		List<String> result = new LinkedList<String>(mapAuths.keySet());
+		Collections.sort(result);
+		return result;
+  // TODO: Get a sorted list of all pattern authors in the store
+	}
+
+	public List<String> getPatternNames() {
+		List<String> result = new LinkedList<String>(mapName.keySet());
+		Collections.sort(result);
+		return result;
+  // TODO: Get a list of all pattern names in the store,
+  // sorted by name
+	}
+}
+
+
+
+package uk.ac.cam.dab80.oop.tick4;
+import java.io.*;
+public class PatternNotFound extends IOException {}
+

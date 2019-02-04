@@ -1,0 +1,10 @@
+javac -classpath document-db.jar GetMovieById.java
+
+jar file in same folder
+
+API says uk.ac.cam.cl.databases.moviedb
+
+Used as import uk.ac.cam.cl.databases.moviedb.MovieDB;
+
+
+Frequency range: 50 - 400
